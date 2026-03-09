@@ -18,12 +18,15 @@ from . import resize_png
 
 _ZONE_COLORS = ["#ff6060", "#60dd60", "#6090ff", "#ffdd40", "#ff60ff", "#40ffee"]
 
-# Collapse two-number arrays (point pairs) onto one line in JSON output.
-_INLINE_PAIR_RE = re.compile(r'\[\s*(-?\d+),\s*(-?\d+)\s*\]', re.DOTALL)
+# Collapse arrays of [x,y] point pairs onto a single line in JSON output.
+_INLINE_POINTS_RE = re.compile(r'\[\s*(\[\s*-?\d+\s*,\s*-?\d+\s*\](?:\s*,\s*\[\s*-?\d+\s*,\s*-?\d+\s*\])*)\s*\]', re.DOTALL)
 
 def _dump_scene_info(data: dict) -> str:
     raw = json.dumps(data, indent=2)
-    return _INLINE_PAIR_RE.sub(lambda m: f'[{m.group(1)}, {m.group(2)}]', raw)
+    def _collapse(m):
+        pairs = re.findall(r'\[\s*(-?\d+)\s*,\s*(-?\d+)\s*\]', m.group(1))
+        return '[' + ', '.join(f'[{x}, {y}]' for x, y in pairs) + ']'
+    return _INLINE_POINTS_RE.sub(_collapse, raw)
 
 
 def run_refresh(data_root: str | None = None) -> None:
