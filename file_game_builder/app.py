@@ -740,7 +740,9 @@ class DataLayoutApp:
             return
         name = name.strip()
         dest_parent = filedialog.askdirectory(
-            title="Choose location for new project", parent=self._win)
+            title="Choose location for new project",
+            initialdir=r"C:\FILE_GAMES\GAMES",
+            parent=self._win)
         if not dest_parent:
             return
         project_root = os.path.join(dest_parent, name)
@@ -771,6 +773,7 @@ class DataLayoutApp:
     def _open_project(self) -> None:
         path = filedialog.askdirectory(
             title="Open project — select the DATA folder or project root",
+            initialdir=r"C:\FILE_GAMES\GAMES",
             parent=self._win,
         )
         if not path:
@@ -804,7 +807,10 @@ class DataLayoutApp:
         if not name or not name.strip():
             return
         name = name.strip()
-        dest_parent = filedialog.askdirectory(title="Choose destination folder", parent=self._win)
+        dest_parent = filedialog.askdirectory(
+            title="Choose destination folder",
+            initialdir=r"C:\FILE_GAMES\GAMES",
+            parent=self._win)
         if not dest_parent:
             return
         target = os.path.join(dest_parent, name)
