@@ -253,7 +253,7 @@ class DataLayoutApp:
                              self._zed.update(mode="rect"),
                              self._set_draw_controls(True)))
         self._done_btn.config(command=self._finish_draw)
-        self._cancel_btn.config(command=self._cancel_draw)
+        self._cancel_btn.config(command=self._on_cancel_btn)
 
         # Scrollable canvas for scene PNG + zone overlay (hidden until needed)
         self._pv_frame   = tk.Frame(right_frame, bg=COLORS["preview_bg"])
@@ -359,7 +359,7 @@ class DataLayoutApp:
                     flat += [cx, cy]
                 if len(flat) >= 4:
                     self._pv_canvas.create_polygon(flat, outline=color,
-                                                    fill=color + "22", width=2)
+                                                    fill=color, stipple="gray25", width=2)
                 if flat:
                     self._pv_canvas.create_text(flat[0], flat[1] - 8, text=zid,
                                                 fill=color, font=self._file_font, anchor="sw")
@@ -368,7 +368,7 @@ class DataLayoutApp:
                 x2, y2 = self._g2c(zone["x"] + zone.get("w", 0),
                                     zone["y"] + zone.get("h", 0))
                 self._pv_canvas.create_rectangle(x1, y1, x2, y2,
-                                                  outline=color, fill=color + "22", width=2)
+                                                  outline=color, fill=color, stipple="gray25", width=2)
                 self._pv_canvas.create_text(x1, y1 - 8, text=zid,
                                              fill=color, font=self._file_font, anchor="sw")
 
@@ -421,6 +421,14 @@ class DataLayoutApp:
         self._zed.update(mode=None, points=[], ids=[], preview_id=None, drag_start=None)
         self._set_draw_controls(False)
 
+    def _on_cancel_btn(self) -> None:
+        """Cancel button: discard in-progress draw and refresh so zones stay visible."""
+        node = self._zed["node"]
+        path = self._zed["scene_path"]
+        self._cancel_draw()
+        if node and path:
+            self._show_scene_png(node, path)
+
     def _finish_draw(self) -> None:
         mode      = self._zed["mode"]
         points    = list(self._zed["points"])
@@ -440,6 +448,7 @@ class DataLayoutApp:
         dlg = _ZoneInfoDialog(self._win, bg=COLORS["canvas_bg"],
                               fg=COLORS["folder_text"], font=self._file_font)
         if dlg.result is None:
+            self._show_scene_png(node, info_path)
             return
 
         zone_id = dlg.result["id"]
@@ -617,7 +626,7 @@ class DataLayoutApp:
         total_h = min(canvas_h + 20, screen_h - 100)
         self._win.geometry(f"{total_w}x{total_h}")
         self._win.update_idletasks()
-        self._paned.sash_place(0, total_w - preview_w, 0)
+        self._paned.sash_place(0, canvas_w, 0)
 
     def _canvas_to_world(self, event) -> tuple[float, float]:
         return self._canvas.canvasx(event.x), self._canvas.canvasy(event.y)
