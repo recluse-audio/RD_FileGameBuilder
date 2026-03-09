@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import sys
 import tkinter as tk
@@ -16,6 +17,13 @@ from . import refresh_game_data
 from . import resize_png
 
 _ZONE_COLORS = ["#ff6060", "#60dd60", "#6090ff", "#ffdd40", "#ff60ff", "#40ffee"]
+
+# Collapse two-number arrays (point pairs) onto one line in JSON output.
+_INLINE_PAIR_RE = re.compile(r'\[\s*(-?\d+),\s*(-?\d+)\s*\]', re.DOTALL)
+
+def _dump_scene_info(data: dict) -> str:
+    raw = json.dumps(data, indent=2)
+    return _INLINE_PAIR_RE.sub(lambda m: f'[{m.group(1)}, {m.group(2)}]', raw)
 
 
 def run_refresh(data_root: str | None = None) -> None:
@@ -450,7 +458,7 @@ class DataLayoutApp:
             info = {}
         info.setdefault("zones", []).append(zone)
         with open(info_path, "w", encoding="utf-8") as f:
-            json.dump(info, f, indent=2)
+            f.write(_dump_scene_info(info))
 
         self._show_scene_png(node, info_path)
 
@@ -645,7 +653,7 @@ class DataLayoutApp:
                     open(dest_file, "w").close()
 
             with open(os.path.join(dest, "scene_info.json"), "w", encoding="utf-8") as f:
-                json.dump(info, f, indent=2)
+                f.write(_dump_scene_info(info))
         except OSError as e:
             messagebox.showerror("Error", str(e), parent=self._win)
             return
