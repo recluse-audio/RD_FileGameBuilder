@@ -651,6 +651,10 @@ class DataLayoutApp:
         try:
             os.makedirs(dest)
             info: dict = {"name": dlg.result["name"], "zones": []}
+            if dlg.result.get("is_locked"):
+                info["isUnlocked"] = False
+            if dlg.result.get("password"):
+                info["password"] = dlg.result["password"]
 
             for key, src_key in (("md", "md_source"), ("png", "png_source")):
                 fname  = dlg.result[key]

@@ -36,7 +36,10 @@ def allman_json(obj, indent: int = 0) -> str:
     if isinstance(obj, list):
         if not obj:
             return "[]"
-        items_str = ", ".join(_scalar(v) for v in obj)
+        items_str = ", ".join(
+            allman_json(v, indent) if isinstance(v, (dict, list)) else _scalar(v)
+            for v in obj
+        )
         return f"[ {items_str} ]"
 
     if not isinstance(obj, dict):
@@ -92,10 +95,17 @@ def write_level_info(level_dir: Path) -> None:
         d for d in level_dir.iterdir()
         if d.is_dir() and d.name.startswith("SCENE_")
     )
-    info: dict = {"name": level_display_name(level_dir.name)}
+    out = level_dir / "level_info.json"
+    try:
+        existing = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    except Exception:
+        existing = {}
+    info: dict = {
+        "name":       level_display_name(level_dir.name),
+        "isUnlocked": existing.get("isUnlocked", True),
+    }
     if child_dirs:
         info["scenes"] = [_scene_friendly_name(d) for d in child_dirs]
-    out = level_dir / "level_info.json"
     out.write_text(allman_json(info) + "\n", encoding="utf-8")
     print(f"  wrote {out.relative_to(_PRINT_BASE)}")
 
@@ -119,6 +129,7 @@ def scan_scene(scene_dir: Path, depth: int = 1) -> dict:
         info = {}
 
     info.setdefault("name", scene_display_name(scene_dir.name))
+    info.setdefault("isUnlocked", True)
 
     # Recurse into child scenes
     child_dirs = sorted(
@@ -160,7 +171,7 @@ def build_scene_state(scene_dir: Path) -> tuple[str, dict]:
         if d.is_dir() and d.name.startswith("SCENE_")
     )
 
-    state: dict = {"isUnlocked": False}
+    state: dict = {"isUnlocked": info.get("isUnlocked", True)}
     if child_dirs:
         state["scenes"] = {
             name: child_state
@@ -225,8 +236,12 @@ def run(data_root_path: str | None = None) -> None:
                     scenes[scene_name] = scene_state
 
                 level_name = level_display_name(level_dir.name)
+                try:
+                    level_info = json.loads((level_dir / "level_info.json").read_text(encoding="utf-8"))
+                except Exception:
+                    level_info = {}
                 levels[level_name] = {
-                    "isUnlocked": False,
+                    "isUnlocked": level_info.get("isUnlocked", True),
                     "scenes": scenes,
                 }
 

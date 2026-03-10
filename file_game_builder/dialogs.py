@@ -66,16 +66,32 @@ class NewSceneDialog(tk.Toplevel):
             tk.Button(self, text="Browse…", command=_browse, **btn_opts).grid(
                 row=row, column=2, padx=(4, 12), pady=4)
 
+        tk.Label(self, text="Password:", **lbl_opts).grid(
+            row=3, column=0, sticky="w", padx=(12, 4), pady=4)
+        self.e_password = tk.Entry(self, width=14, **ent_opts)
+        self.e_password.grid(row=3, column=1, sticky="w", pady=4)
+        tk.Label(self, text="optional · max 12 chars",
+                 bg=bg, fg="#507090", font=font).grid(
+            row=3, column=2, sticky="w", padx=(4, 12), pady=4)
+
+        self._is_locked_var = tk.BooleanVar(value=False)
+        tk.Label(self, text="Locked:", **lbl_opts).grid(
+            row=4, column=0, sticky="w", padx=(12, 4), pady=4)
+        tk.Checkbutton(self, variable=self._is_locked_var,
+                       bg=bg, fg=fg, activebackground=bg, activeforeground=fg,
+                       selectcolor="#263040", relief=tk.FLAT).grid(
+            row=4, column=1, sticky="w", pady=4)
+
         if HAS_DND:
             hint = tk.Label(self, text="or drop a .md / .png file anywhere here",
                             bg=bg, fg="#507090", font=font)
-            hint.grid(row=3, column=0, columnspan=3, pady=(0, 4))
+            hint.grid(row=5, column=0, columnspan=3, pady=(0, 4))
             self._wire_dnd()
         else:
-            tk.Frame(self, bg=bg, height=4).grid(row=3, column=0)
+            tk.Frame(self, bg=bg, height=4).grid(row=5, column=0)
 
         btn_frame = tk.Frame(self, bg=bg)
-        btn_frame.grid(row=4, column=0, columnspan=3, pady=10)
+        btn_frame.grid(row=6, column=0, columnspan=3, pady=10)
         tk.Button(btn_frame, text="Create", font=font,
                   bg="#2e4a6a", fg=fg, activebackground="#3a5a7a", relief=tk.FLAT,
                   command=self._ok).pack(side=tk.LEFT, padx=6)
@@ -121,12 +137,18 @@ class NewSceneDialog(tk.Toplevel):
         name = self.e_name.get().strip()
         if not name:
             return
+        password = self.e_password.get().strip()
+        if password and (len(password) > 12 or not password.isascii() or not password.isprintable()):
+            self.e_password.config(bg="#5a2020")
+            return
         self.result = {
             "name":       name,
             "md":         self.e_md.get().strip(),
             "md_source":  self._md_source,
             "png":        self.e_png.get().strip(),
             "png_source": self._png_source,
+            "password":   password,
+            "is_locked":  self._is_locked_var.get(),
         }
         self.destroy()
 
