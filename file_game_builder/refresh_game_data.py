@@ -101,7 +101,7 @@ def write_level_info(level_dir: Path) -> None:
     except Exception:
         existing = {}
     info: dict = {
-        "name":       level_display_name(level_dir.name),
+        "name":       existing.get("name", level_display_name(level_dir.name)),
         "isUnlocked": existing.get("isUnlocked", True),
     }
     if child_dirs:
@@ -235,11 +235,11 @@ def run(data_root_path: str | None = None) -> None:
                     scene_name, scene_state = build_scene_state(scene_dir)
                     scenes[scene_name] = scene_state
 
-                level_name = level_display_name(level_dir.name)
                 try:
                     level_info = json.loads((level_dir / "level_info.json").read_text(encoding="utf-8"))
                 except Exception:
                     level_info = {}
+                level_name = level_info.get("name", level_display_name(level_dir.name))
                 levels[level_name] = {
                     "isUnlocked": level_info.get("isUnlocked", True),
                     "scenes": scenes,

@@ -1,6 +1,22 @@
+import json
 import os
 
 from .constants import PAD, GAP, HEADER_H, FILE_H, MIN_W, COLORS, EXT_COLORS
+
+
+def _friendly_name(path: str, dir_name: str) -> str:
+    """Return the friendly name from level_info.json or scene_info.json, falling back to dir_name."""
+    for info_file in ("level_info.json", "scene_info.json"):
+        info_path = os.path.join(path, info_file)
+        if os.path.isfile(info_path):
+            try:
+                data = json.loads(open(info_path, encoding="utf-8").read())
+                name = data.get("name", "").strip()
+                if name:
+                    return name
+            except Exception:
+                pass
+    return dir_name
 
 
 def ext_color(name: str) -> str:
@@ -45,9 +61,10 @@ def _scene_info_for_png(node) -> str | None:
 
 class Node:
     def __init__(self, name: str, path: str, is_dir: bool):
-        self.name     = name
-        self.path     = path
-        self.is_dir   = is_dir
+        self.name         = name   # always the filesystem entry name
+        self.display_name = name   # friendly name shown in the GUI
+        self.path         = path
+        self.is_dir       = is_dir
         self.children: list["Node"] = []
 
     def add(self, child: "Node") -> None:
@@ -58,6 +75,8 @@ def build_tree(path: str, name: str | None = None) -> Node:
     name = name or os.path.basename(path)
     node = Node(name, path, os.path.isdir(path))
     if node.is_dir:
+        if name.startswith("LEVEL_") or name.startswith("SCENE_"):
+            node.display_name = _friendly_name(path, name)
         try:
             entries = sorted(os.scandir(path), key=lambda e: (not e.is_dir(), e.name.lower()))
             for entry in entries:
@@ -74,7 +93,7 @@ def measure(node: Node, canvas_font, file_font) -> tuple[int, int]:
 
     child_sizes = [measure(c, canvas_font, file_font) for c in node.children]
     inner_w = max((cw for cw, _ in child_sizes), default=0)
-    inner_w = max(inner_w, canvas_font.measure(node.name) + 8)
+    inner_w = max(inner_w, canvas_font.measure(node.display_name) + 8)
     inner_h = sum(ch for _, ch in child_sizes) + GAP * max(len(node.children) - 1, 0)
     return max(inner_w + PAD * 2, MIN_W), HEADER_H + PAD + inner_h + PAD
 
@@ -96,7 +115,7 @@ def draw_node(canvas, node: Node, x: int, y: int, w: int, h: int,
                              fill=COLORS["folder_bg"], outline=COLORS["border"], width=1)
     canvas.create_rectangle(x, y, x + w, y + HEADER_H,
                              fill=COLORS["folder_hdr"], outline="", width=0)
-    canvas.create_text(x + PAD, y + HEADER_H // 2, text=node.name,
+    canvas.create_text(x + PAD, y + HEADER_H // 2, text=node.display_name,
                         anchor="w", fill=COLORS["folder_text"], font=canvas_font)
     canvas.create_text(x + w - PAD, y + HEADER_H // 2, text="+",
                         anchor="e", fill="#6a9abf", font=canvas_font)

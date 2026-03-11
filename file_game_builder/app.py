@@ -174,16 +174,16 @@ class DataLayoutApp:
         self._lores_btn.pack(side=tk.LEFT, padx=2, pady=2)
 
     def _build_paned(self) -> None:
-        self._paned = tk.PanedWindow(self._win, orient=tk.HORIZONTAL,
-                                      bg=COLORS["canvas_bg"], sashwidth=5,
-                                      sashrelief=tk.FLAT)
-        self._paned.pack(fill=tk.BOTH, expand=True)
+        self._main_frame = tk.Frame(self._win, bg=COLORS["canvas_bg"])
+        self._main_frame.pack(fill=tk.BOTH, expand=True)
         self._build_left_panel()
         self._build_right_panel()
 
     def _build_left_panel(self) -> None:
-        left_frame = tk.Frame(self._paned, bg=COLORS["canvas_bg"])
-        self._paned.add(left_frame, stretch="always")
+        self._left_frame = tk.Frame(self._main_frame, bg=COLORS["canvas_bg"])
+        self._left_frame.pack(side=tk.LEFT, fill=tk.Y)
+        self._left_frame.pack_propagate(False)
+        left_frame = self._left_frame
 
         self._vscroll = tk.Scrollbar(left_frame, orient=tk.VERTICAL)
         self._hscroll = tk.Scrollbar(left_frame, orient=tk.HORIZONTAL)
@@ -203,8 +203,8 @@ class DataLayoutApp:
         self._canvas.bind("<Button-3>", self._on_right_click)
 
     def _build_right_panel(self) -> None:
-        right_frame = tk.Frame(self._paned, bg=COLORS["preview_bg"], width=340)
-        self._paned.add(right_frame, stretch="never")
+        right_frame = tk.Frame(self._main_frame, bg=COLORS["preview_bg"])
+        right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Header row: filename label + save button
         preview_hdr_frame = tk.Frame(right_frame, bg=COLORS["preview_hdr"])
@@ -300,11 +300,23 @@ class DataLayoutApp:
 
     # ------------------------------------------------------------------ preview
 
+    def _header_text(self, node: Node) -> str:
+        """Return a breadcrumb path relative to the LEVELS directory."""
+        levels_dir = self._project.get("levels", "")
+        if not levels_dir:
+            return node.name
+        try:
+            rel = os.path.relpath(node.path, levels_dir)
+            parts = rel.replace("\\", "/").split("/")
+            return "  /  ".join(parts)
+        except ValueError:
+            return node.name
+
     def _mark_modified(self, event=None) -> None:
         if not self._is_modified:
             self._is_modified = True
-            name = os.path.basename(self._preview_path) if self._preview_path else ""
-            self._preview_header.config(text=f"{name}  •")
+            current = self._preview_header.cget("text")
+            self._preview_header.config(text=f"{current}  •")
 
     def _save_preview(self) -> None:
         if not self._preview_path:
@@ -319,7 +331,12 @@ class DataLayoutApp:
             messagebox.showerror("Save Error", str(e), parent=self._win)
             return
         self._is_modified = False
-        self._preview_header.config(text=os.path.basename(self._preview_path))
+        # Restore breadcrumb without the unsaved indicator
+        current = self._preview_header.cget("text")
+        self._preview_header.config(text=current.removesuffix("  •"))
+        if os.path.basename(self._preview_path) in ("scene_info.json", "level_info.json"):
+            run_refresh(self._project["root"])
+            self._redraw()
 
     def _do_save_all(self) -> None:
         self._save_preview()
@@ -530,7 +547,7 @@ class DataLayoutApp:
         self._preview_text.pack_forget()
         self._zone_controls.pack(side=tk.TOP, fill=tk.X)
         self._pv_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self._preview_header.config(text=node.name)
+        self._preview_header.config(text=self._header_text(node))
         self._save_btn.config(state=tk.DISABLED)
         self._show_scene_png(node, scene_info_path)
 
@@ -558,7 +575,7 @@ class DataLayoutApp:
         self._is_modified       = False
         self._preview_image_ref = None
 
-        self._preview_header.config(text=node.name)
+        self._preview_header.config(text=self._header_text(node))
         self._preview_text.config(state=tk.NORMAL)
         self._preview_text.delete("1.0", tk.END)
 
@@ -624,9 +641,8 @@ class DataLayoutApp:
         preview_w = 420
         total_w = min(canvas_w + preview_w, screen_w - 60)
         total_h = min(canvas_h + 20, screen_h - 100)
+        self._left_frame.config(width=canvas_w, height=total_h)
         self._win.geometry(f"{total_w}x{total_h}")
-        self._win.update_idletasks()
-        self._paned.sash_place(0, canvas_w, 0)
 
     def _canvas_to_world(self, event) -> tuple[float, float]:
         return self._canvas.canvasx(event.x), self._canvas.canvasy(event.y)
@@ -678,11 +694,15 @@ class DataLayoutApp:
 
     def _add_level(self) -> None:
         dir_name, n = _next_numbered_dir(self._project["levels"], "LEVEL_")
+        name = simpledialog.askstring(
+            "New Level", "Level name:", initialvalue=f"Level {n}", parent=self._win)
+        if not name or not name.strip():
+            return
         dest = os.path.join(self._project["levels"], dir_name)
         try:
             os.makedirs(dest)
             with open(os.path.join(dest, "level_info.json"), "w", encoding="utf-8") as f:
-                json.dump({"name": f"Level {n}"}, f, indent=2)
+                json.dump({"name": name.strip()}, f, indent=2)
         except OSError as e:
             messagebox.showerror("Error", str(e), parent=self._win)
             return
@@ -727,6 +747,18 @@ class DataLayoutApp:
         self._protected.add(self._project["root"])
         self._protected.add(self._project["levels"])
 
+    def _renumber_siblings(self, deleted_path: str, prefix: str) -> None:
+        """After deleting a SCENE_N or LEVEL_N dir, close any gaps in numbering."""
+        parent = os.path.dirname(deleted_path)
+        siblings = sorted(
+            e.name for e in os.scandir(parent)
+            if e.is_dir() and e.name.startswith(prefix)
+        )
+        for new_n, old_name in enumerate(siblings, start=1):
+            new_name = f"{prefix}{new_n}"
+            if old_name != new_name:
+                os.rename(os.path.join(parent, old_name), os.path.join(parent, new_name))
+
     def _delete_node(self, node: Node) -> None:
         if os.path.abspath(node.path) in self._protected:
             messagebox.showerror("Protected", f"{node.name} cannot be deleted.", parent=self._win)
@@ -741,6 +773,10 @@ class DataLayoutApp:
             messagebox.showerror("Error", str(e), parent=self._win)
             return
         if node.is_dir:
+            for prefix in ("SCENE_", "LEVEL_"):
+                if node.name.startswith(prefix):
+                    self._renumber_siblings(node.path, prefix)
+                    break
             run_refresh(self._project["root"])
         self.clear_preview()
         self._redraw()
