@@ -119,6 +119,7 @@ class DataLayoutApp:
         self._is_modified       = False
         self._hit_areas: list   = []
         self._protected: set    = set()
+        self._collapsed: set    = set()
         self._zed = {
             "mode":       None,    # "polygon" | "rect" | None
             "points":     [],      # [(gx, gy)] in 320x240 game coords
@@ -630,12 +631,12 @@ class DataLayoutApp:
         self._canvas.delete("all")
         self._hit_areas = []
         tree = build_tree(self._project["root"], "DATA")
-        tw, th = measure(tree, self._folder_font, self._file_font)
+        tw, th = measure(tree, self._folder_font, self._file_font, self._collapsed)
         canvas_w = tw + self._MARGIN * 2
         canvas_h = th + self._MARGIN * 2
         self._canvas.config(scrollregion=(0, 0, canvas_w, canvas_h))
         draw_node(self._canvas, tree, self._MARGIN, self._MARGIN, tw, th,
-                  self._folder_font, self._file_font, self._hit_areas)
+                  self._folder_font, self._file_font, self._hit_areas, self._collapsed)
         screen_w = self._win.winfo_screenwidth()
         screen_h = self._win.winfo_screenheight()
         preview_w = 420
@@ -892,7 +893,14 @@ class DataLayoutApp:
     def _on_left_click(self, event) -> None:
         cx, cy = self._canvas_to_world(event)
         node = self._find_node_at(cx, cy)
-        if node is None or node.is_dir:
+        if node is None:
+            return
+        if node.is_dir:
+            if node.path in self._collapsed:
+                self._collapsed.discard(node.path)
+            else:
+                self._collapsed.add(node.path)
+            self._redraw()
             return
         _, ext = os.path.splitext(node.name)
         if ext.lower() in PREVIEW_EXTS:

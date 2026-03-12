@@ -86,12 +86,16 @@ def build_tree(path: str, name: str | None = None) -> Node:
     return node
 
 
-def measure(node: Node, canvas_font, file_font) -> tuple[int, int]:
+def measure(node: Node, canvas_font, file_font, collapsed: set | None = None) -> tuple[int, int]:
     if not node.is_dir:
         tw = file_font.measure(node.name) + 24
         return max(tw, MIN_W), FILE_H
 
-    child_sizes = [measure(c, canvas_font, file_font) for c in node.children]
+    if collapsed and node.path in collapsed:
+        label_w = canvas_font.measure(node.display_name) + 8
+        return max(label_w + PAD * 2, MIN_W), HEADER_H
+
+    child_sizes = [measure(c, canvas_font, file_font, collapsed) for c in node.children]
     inner_w = max((cw for cw, _ in child_sizes), default=0)
     inner_w = max(inner_w, canvas_font.measure(node.display_name) + 8)
     inner_h = sum(ch for _, ch in child_sizes) + GAP * max(len(node.children) - 1, 0)
@@ -99,7 +103,8 @@ def measure(node: Node, canvas_font, file_font) -> tuple[int, int]:
 
 
 def draw_node(canvas, node: Node, x: int, y: int, w: int, h: int,
-              canvas_font, file_font, hit_areas: list, depth: int = 0) -> None:
+              canvas_font, file_font, hit_areas: list,
+              collapsed: set | None = None, depth: int = 0) -> None:
     if not node.is_dir:
         canvas.create_rectangle(x, y, x + w, y + h,
                                  fill=COLORS["file_bg"], outline=COLORS["border"], width=1)
@@ -111,21 +116,28 @@ def draw_node(canvas, node: Node, x: int, y: int, w: int, h: int,
         hit_areas.append((x, y, x + w, y + h, node))
         return
 
+    is_collapsed = bool(collapsed and node.path in collapsed)
+    indicator    = "\u25b6" if is_collapsed else "\u25bc"  # ▶ / ▼
+
     canvas.create_rectangle(x, y, x + w, y + h,
                              fill=COLORS["folder_bg"], outline=COLORS["border"], width=1)
     canvas.create_rectangle(x, y, x + w, y + HEADER_H,
                              fill=COLORS["folder_hdr"], outline="", width=0)
     canvas.create_text(x + PAD, y + HEADER_H // 2, text=node.display_name,
                         anchor="w", fill=COLORS["folder_text"], font=canvas_font)
-    canvas.create_text(x + w - PAD, y + HEADER_H // 2, text="+",
+    canvas.create_text(x + w - PAD, y + HEADER_H // 2, text=indicator,
                         anchor="e", fill="#6a9abf", font=canvas_font)
 
     hit_areas.append((x, y, x + w, y + HEADER_H, node))
 
+    if is_collapsed:
+        return
+
     cx = x + PAD
     cy = y + HEADER_H + PAD
-    child_sizes = [measure(c, canvas_font, file_font) for c in node.children]
+    child_sizes = [measure(c, canvas_font, file_font, collapsed) for c in node.children]
     inner_w = w - PAD * 2
     for child, (cw, ch) in zip(node.children, child_sizes):
-        draw_node(canvas, child, cx, cy, inner_w, ch, canvas_font, file_font, hit_areas, depth + 1)
+        draw_node(canvas, child, cx, cy, inner_w, ch, canvas_font, file_font,
+                  hit_areas, collapsed, depth + 1)
         cy += ch + GAP
