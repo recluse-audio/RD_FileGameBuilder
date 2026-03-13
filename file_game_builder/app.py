@@ -120,6 +120,7 @@ class DataLayoutApp:
         self._hit_areas: list   = []
         self._protected: set    = set()
         self._collapsed: set    = set()
+        self._clipboard: str | None = None
         self._zed = {
             "mode":       None,    # "polygon" | "rect" | None
             "points":     [],      # [(gx, gy)] in 320x240 game coords
@@ -782,6 +783,47 @@ class DataLayoutApp:
         self.clear_preview()
         self._redraw()
 
+    def _copy_node(self, node: Node) -> None:
+        self._clipboard = node.path
+
+    def _paste_node(self, parent_node: Node) -> None:
+        if not self._clipboard or not os.path.exists(self._clipboard):
+            messagebox.showinfo("Paste", "Nothing to paste.", parent=self._win)
+            return
+        src      = self._clipboard
+        src_name = os.path.basename(src)
+        dest     = None
+
+        # For numbered dirs pasted into the right parent, assign the next number
+        if os.path.isdir(src):
+            for prefix in ("SCENE_", "LEVEL_"):
+                if src_name.startswith(prefix):
+                    dir_name, _ = _next_numbered_dir(parent_node.path, prefix)
+                    dest = os.path.join(parent_node.path, dir_name)
+                    break
+
+        if dest is None:
+            dest = os.path.join(parent_node.path, src_name)
+
+        if os.path.exists(dest):
+            if not messagebox.askyesno(
+                    "Overwrite?", f"'{os.path.basename(dest)}' already exists. Overwrite?",
+                    parent=self._win):
+                return
+            shutil.rmtree(dest) if os.path.isdir(dest) else os.remove(dest)
+
+        try:
+            if os.path.isdir(src):
+                shutil.copytree(src, dest)
+            else:
+                shutil.copy2(src, dest)
+        except OSError as e:
+            messagebox.showerror("Error", str(e), parent=self._win)
+            return
+
+        run_refresh(self._project["root"])
+        self._redraw()
+
     # ------------------------------------------------------------------ project management
 
     def _set_project(self, new_root: str, name: str | None = None) -> None:
@@ -932,6 +974,17 @@ class DataLayoutApp:
             menu.add_command(label="New Folder...", command=lambda n=node: self._add_folder(n))
             menu.add_separator()
 
+        menu.add_command(label=f"Copy {node.name}",
+                         command=lambda n=node: self._copy_node(n))
+
+        if node.is_dir:
+            paste_label = (f"Paste  ← {os.path.basename(self._clipboard)}"
+                           if self._clipboard else "Paste")
+            menu.add_command(label=paste_label,
+                             command=lambda n=node: self._paste_node(n),
+                             state=tk.NORMAL if self._clipboard else tk.DISABLED)
+
+        menu.add_separator()
         menu.add_command(label=f"Delete {node.name}...",
                          command=lambda n=node: self._delete_node(n),
                          foreground="#e07070", activeforeground="#ff9090")

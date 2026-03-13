@@ -65,10 +65,27 @@ class Node:
         self.display_name = name   # friendly name shown in the GUI
         self.path         = path
         self.is_dir       = is_dir
+        self.is_locked    = False  # True if scene has a password or isUnlocked==false
         self.children: list["Node"] = []
 
     def add(self, child: "Node") -> None:
         self.children.append(child)
+
+
+def _scene_is_locked(path: str) -> bool:
+    """Return True if scene_info.json has a non-empty password or isUnlocked==false."""
+    info_path = os.path.join(path, "scene_info.json")
+    if not os.path.isfile(info_path):
+        return False
+    try:
+        data = json.loads(open(info_path, encoding="utf-8").read())
+        if data.get("password", ""):
+            return True
+        if data.get("isUnlocked", True) is False:
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def build_tree(path: str, name: str | None = None) -> Node:
@@ -77,6 +94,8 @@ def build_tree(path: str, name: str | None = None) -> Node:
     if node.is_dir:
         if name.startswith("LEVEL_") or name.startswith("SCENE_"):
             node.display_name = _friendly_name(path, name)
+        if name.startswith("SCENE_"):
+            node.is_locked = _scene_is_locked(path)
         try:
             entries = sorted(os.scandir(path), key=lambda e: (not e.is_dir(), e.name.lower()))
             for entry in entries:
@@ -118,11 +137,12 @@ def draw_node(canvas, node: Node, x: int, y: int, w: int, h: int,
 
     is_collapsed = bool(collapsed and node.path in collapsed)
     indicator    = "\u25b6" if is_collapsed else "\u25bc"  # ▶ / ▼
+    hdr_color    = "#5a2a2a" if node.is_locked else COLORS["folder_hdr"]
 
     canvas.create_rectangle(x, y, x + w, y + h,
                              fill=COLORS["folder_bg"], outline=COLORS["border"], width=1)
     canvas.create_rectangle(x, y, x + w, y + HEADER_H,
-                             fill=COLORS["folder_hdr"], outline="", width=0)
+                             fill=hdr_color, outline="", width=0)
     canvas.create_text(x + PAD, y + HEADER_H // 2, text=node.display_name,
                         anchor="w", fill=COLORS["folder_text"], font=canvas_font)
     canvas.create_text(x + w - PAD, y + HEADER_H // 2, text=indicator,

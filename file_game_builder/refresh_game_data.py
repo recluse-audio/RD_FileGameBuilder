@@ -92,8 +92,8 @@ def _scene_friendly_name(scene_dir: Path) -> str:
 def write_level_info(level_dir: Path) -> None:
     """Write level_info.json with the display name and friendly-named list of child scenes."""
     child_dirs = sorted(
-        d for d in level_dir.iterdir()
-        if d.is_dir() and d.name.startswith("SCENE_")
+        (d for d in level_dir.iterdir() if d.is_dir() and d.name.startswith("SCENE_")),
+        key=lambda d: _scene_friendly_name(d).lower()
     )
     out = level_dir / "level_info.json"
     try:
@@ -133,8 +133,8 @@ def scan_scene(scene_dir: Path, depth: int = 1) -> dict:
 
     # Recurse into child scenes
     child_dirs = sorted(
-        d for d in scene_dir.iterdir()
-        if d.is_dir() and d.name.startswith("SCENE_")
+        (d for d in scene_dir.iterdir() if d.is_dir() and d.name.startswith("SCENE_")),
+        key=lambda d: _scene_friendly_name(d).lower()
     )
 
     if child_dirs:
@@ -167,8 +167,8 @@ def build_scene_state(scene_dir: Path) -> tuple[str, dict]:
     friendly_name = info.get("name", scene_display_name(scene_dir.name))
 
     child_dirs = sorted(
-        d for d in scene_dir.iterdir()
-        if d.is_dir() and d.name.startswith("SCENE_")
+        (d for d in scene_dir.iterdir() if d.is_dir() and d.name.startswith("SCENE_")),
+        key=lambda d: _scene_friendly_name(d).lower()
     )
 
     state: dict = {"isUnlocked": info.get("isUnlocked", True)}
@@ -224,8 +224,8 @@ def run(data_root_path: str | None = None) -> None:
                 write_level_info(level_dir)
 
                 scene_dirs = sorted(
-                    d for d in level_dir.iterdir()
-                    if d.is_dir() and d.name.startswith("SCENE_")
+                    (d for d in level_dir.iterdir() if d.is_dir() and d.name.startswith("SCENE_")),
+                    key=lambda d: _scene_friendly_name(d).lower()
                 )
 
                 scenes: dict = {}
